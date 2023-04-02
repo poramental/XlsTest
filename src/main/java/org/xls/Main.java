@@ -10,17 +10,19 @@ import org.xls.parser.Parser;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.util.List;
 
 
 public class Main {
 
 
     public static void main(String[] args) throws Exception{
-        File file = new File("D:\\public\\XlsTest\\src\\main\\resources\\obucheniya-inostrannykh-grazhdan\\2\\lessons",
-                "Расписание_занятий_2_курс_27.03.23-01.04.23.xls");
+        File file = new File("D:\\public\\XlsTest\\src\\main\\resources\\biologicheskij\\2\\lessons",
+                "Расписание_занятий_2_курс_27.03.2023.xls");
         Parser parser = new Parser();
         parser.parse(file);
-        for(Group group : parser.getGroups()){
+        List<Group> groups = parser.getGroups();
+        for(Group group : groups){
             System.out.println(group);
         }
     }

@@ -91,59 +91,112 @@ public  class Parser {
         return arr[arr.length - 1].replace(")","")
                 .replace(".",":");
     }
+
+    private  HashMap<Integer,Subgroup> parseGroups(List<Cell> workspace) throws Exception{
+        HashMap<Integer,Subgroup> map = new HashMap<>();
+        Queue<Group> queue = new ArrayDeque<>();
+        Queue<Group> queueCache = new ArrayDeque<>();
+        int count = 0;
+        for(int i = 0; true; i++) {
+
+            if (parsMode == ParserStage.PARSER_STAGE_NAME_OF_GROUPS) {
+                if (workspace.get(i + 1).getStringCellValue().equals("")) {
+                    throw new Exception("table format Exception.");
+                }
+                Group group = new Group().setName(workspace.get(i).getStringCellValue());
+                if(!(workspace.get(i+1).getColumnIndex() == 3 && workspace.get(i + 1).getCellStyle().getBorderLeft() == 5))
+                    group.setCountOfSubGroups(workspace.get(i+1).getColumnIndex() - workspace.get(i).getColumnIndex());
+                else
+                    group.setCountOfSubGroups(workspace.get(i).getColumnIndex() - workspace.get(i-1).getColumnIndex());
+                groups.add(group);
+                queue.add(group);
+                count++;
+                if(workspace.get(i+1).getColumnIndex() == 3 && workspace.get(i + 1).getCellStyle().getBorderLeft() == 5){
+                    parsMode = ParserStage.PARSER_STAGE_GROUPS_ID;
+                }
+                continue;
+            }
+            if (parsMode == ParserStage.PARSER_STAGE_GROUPS_ID) {
+                Group group = queue.poll();
+                if(group != null) {
+                    queueCache.add(group);
+                    group.setId(workspace.get(i).getStringCellValue());
+                }
+                if(workspace.get(i+1).getColumnIndex() == 3 && workspace.get(i + 1).getCellStyle().getBorderLeft() > 3){
+                    for(int j = 0; j < count; j++)
+                        queue.add(queueCache.poll());
+                    parsMode = ParserStage.PARSER_STAGE_SUBGROUPS;
+                }
+                continue;
+            }
+            if (parsMode == ParserStage.PARSER_STAGE_SUBGROUPS) {
+                Group group = queue.poll();
+                int lastIndex = 0;
+                if(group != null) {
+                    for (int index = 0; index < group.getCountOfSubGroups(); index++) {
+                        Subgroup subgroup = new Subgroup().setId(workspace.get(i + index).getStringCellValue());
+                        map.put(workspace.get(i + index).getColumnIndex(), subgroup);
+                        group.addSubgroup(subgroup);
+                        lastIndex = index;
+                    }
+                }
+                if(workspace.get(i+1).getColumnIndex() == 0 && workspace.get(i + 1).getCellStyle().getBorderLeft() > 3){
+                    parsMode = ParserStage.PARSER_STAGE_SKIP;
+                    return map;
+                }
+                i += lastIndex;
+
+            }
+        }
+
+    }
+
     public void parse(File xlsFile) throws Exception{
         Workbook wb = readWorkbook(xlsFile);
         List<Cell> workspace = returnWorkspace(wb);
+        print(workspace);
         final int length = getLengthOfWorkspace(workspace);
-        HashMap<Integer,Subgroup> map = new HashMap<>();
-
+        parsMode = ParserStage.PARSER_STAGE_NAME_OF_GROUPS;
+        HashMap<Integer,Subgroup> map = parseGroups(workspace);
         String day = "";
         String date = "";
         String startTime = "";
         String endTime = "";
         Queue<Lesson> queueOfLessons = new ArrayDeque<>();
-        Stack<Lesson> stack = new Stack<>();
-
+        Queue<Lesson> queueCache = new ArrayDeque<>();
+        int countOfLessons = 0;
+        int skip = 0;
         for(int i = 0; i < workspace.size() - 1 ; i++){
 
-            if(i < length / 2) {
-                if(workspace.get(i + 1).getStringCellValue().equals("")){
-                    throw new Exception("table format Exception.");
-                }
-                groups.add(new Group().setName(workspace.get(i).getStringCellValue()));
-                continue;
+            if (parsMode == ParserStage.PARSER_STAGE_SKIP) {
+                if(workspace.get(i + 1).getCellStyle().getBorderLeft() > 3) {
+                    skip++;
+                    if(skip == 3) {
+                        parsMode = ParserStage.PARSER_STAGE_DAY;
+                        continue;
+                    }
+                } else
+                    continue;
+
             }
-            if(i >= length / 2 && i < length ) {
-                groups.get(i - length / 2).setId(workspace.get(i).getStringCellValue());
-                continue;
-            }
-            if(i >= length && i < length * 2) {
-                if(workspace.get(i + 1).getStringCellValue().equals("")){
-                    throw new Exception("table format Exception.");
-                }
-                int index = (i - length ) / 2;
-                Subgroup first = new Subgroup().setId(workspace.get(i).getStringCellValue());
-                Subgroup second = new Subgroup().setId(workspace.get(i + 1).getStringCellValue());
-                groups.get(index).setFirstSubgroup(first);
-                groups.get(index).setSecondSubgroup(second);
-                map.put(workspace.get(i).getColumnIndex(), first);
-                map.put(workspace.get(i).getColumnIndex() + 1, second);
-                i++;
-                continue;
+            if(workspace.get(i).getColumnIndex() == 2 && workspace.get(i).getCellStyle().getBorderLeft() >3){
+                parsMode = ParserStage.PARSER_STAGE_TIME;
             }
 
-            if(workspace.get(i).getCellStyle().getBorderLeft() == 5 && workspace.get(i).getColumnIndex() == 0){
+            if(parsMode == ParserStage.PARSER_STAGE_DAY){
                 day = workspace.get(i).getStringCellValue();
+                parsMode = ParserStage.PARSER_STAGE_DATE;
                 continue;
             }
-            if(workspace.get(i).getCellStyle().getBorderLeft() == 5 && workspace.get(i).getColumnIndex() == 2){
+            if(parsMode == ParserStage.PARSER_STAGE_TIME){
                 startTime = parseStartTime(workspace.get(i));
                 endTime = parseEndTime(workspace.get(i));
                 parsMode = ParserStage.PARSER_STAGE_LESSONS;
                 continue;
             }
-            if(workspace.get(i).getCellStyle().getBorderLeft() == 0 && workspace.get(i).getColumnIndex() == 1){
+            if(parsMode == ParserStage.PARSER_STAGE_DATE){
                 date = workspace.get(i).getStringCellValue();
+                parsMode = ParserStage.PARSER_STAGE_TIME;
                 continue;
             }
             if(parsMode == ParserStage.PARSER_STAGE_LESSONS ) {
@@ -153,6 +206,7 @@ public  class Parser {
                         .setStartTime(startTime)
                         .setEndTime(endTime);
                 queueOfLessons.add(lesson);
+                countOfLessons++;
                 if ((isAdjacentColumns(workspace.get(i),workspace.get(i + 1)) ||
                         isPenultimateColumnAndTheNextIsTheFirst(workspace.get(i),workspace.get(i+1),length)) ||
                         isSingleColumnInTheRow(workspace.get(i),workspace.get(i+1))){
@@ -175,7 +229,11 @@ public  class Parser {
                     }
 
                 } else {
-                    map.get(workspace.get(i).getColumnIndex()).addLesson(lesson);
+                    try {
+                        map.get(workspace.get(i).getColumnIndex()).addLesson(lesson);
+                    } catch(NullPointerException e){
+                            System.out.println(workspace.get(i).getStringCellValue());
+                        }
                 }
                 if(workspace.get(i + 1).getColumnIndex() == 3){
                     parsMode = ParserStage.PARSER_STAGE_TEACHERS;
@@ -183,36 +241,44 @@ public  class Parser {
                 }
             }if(parsMode == ParserStage.PARSER_STAGE_TEACHERS){
                 Lesson lesson = queueOfLessons.poll();
-                stack.add(lesson);
-
-                if(!workspace.get(i).getStringCellValue().equals("")) {
-                    if(!workspace.get(i).getStringCellValue().contains(",")) {
-                        Teacher teacher = parseTeacher(workspace.get(i).getStringCellValue());
-                        lesson.addTeacher(teacher);
-                        teachers.add(teacher);
-                        teacher.addLesson(lesson);
-                    }else{
-                        for(String teacherString : splitManyTeachersToList(workspace.get(i))){
-                            Teacher teacher = parseTeacher(teacherString);
+                if(lesson != null) {
+                    queueCache.add(lesson);
+                    if (!workspace.get(i).getStringCellValue().equals("")) {
+                        if (!workspace.get(i).getStringCellValue().contains(",")) {
+                            Teacher teacher = parseTeacher(workspace.get(i).getStringCellValue());
                             lesson.addTeacher(teacher);
+                            teachers.add(teacher);
                             teacher.addLesson(lesson);
+                        } else {
+                            for (String teacherString : splitManyTeachersToList(workspace.get(i))) {
+                                Teacher teacher = parseTeacher(teacherString);
+                                lesson.addTeacher(teacher);
+                                teacher.addLesson(lesson);
+                            }
                         }
-                    }
+                    } else
+                        lesson.addTeacher(new Teacher());
                 }
-                else
-                    lesson.addTeacher(new Teacher());
                 if(workspace.get(i + 1).getColumnIndex() == 3){
                     parsMode = ParserStage.PARSER_STAGE_AUDITORIUMS;
-                    for(int j = 0; j < stack.size(); j++){
-                        queueOfLessons.add(stack.pop());
+                    for(int j = 0; j < countOfLessons  ; j++){
+                        if(queueCache.peek() != null)
+                            queueOfLessons.add(queueCache.poll());
+                        else
+                            break;
                     }
                     continue;
                 }
             }if(parsMode == ParserStage.PARSER_STAGE_AUDITORIUMS){
                 Lesson lesson = queueOfLessons.poll();
-                if(lesson == null) continue;
+                if(lesson == null) {
+                    if(workspace.get(i+1).getCellStyle().getBorderLeft() == 5 && workspace.get(i + 1).getColumnIndex() == 0 ) {
+                        parsMode = ParserStage.PARSER_STAGE_DAY;
+                    }
+                    countOfLessons = 0;
+                    continue;
+                };
                 lesson.setAuditorium(workspace.get(i).getStringCellValue());
-                stack.clear();
             }
 
         }
@@ -323,9 +389,12 @@ public  class Parser {
 
     private Optional<Group> findGroupBySubgroupIndex(String index){
         for(int i = 0; i < groups.size(); i++ ){
-            if(groups.get(i).getFirstSubgroup().getId().equals(index) || groups.get(i).getSecondSubgroup().getId().equals(index)){
-                return Optional.of(groups.get(i));
+            for(int j = 0; j < groups.get(i).getSubgroups().size(); j++ ){
+                if(groups.get(i).getSubgroups().get(j).getId().equals(index)){
+                    return Optional.of(groups.get(i));
+                }
             }
+
         }
         return Optional.empty();
     }

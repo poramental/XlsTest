@@ -23,14 +23,18 @@ public class Group {
 
     List<Lesson> lessons = new ArrayList<>(); // общие пары
 
-    Subgroup firstSubgroup;
-
-    Subgroup secondSubgroup;
+    List<Subgroup> subgroups = new ArrayList<>();
 
     String name;
 
+    int countOfSubGroups; // transitional
+
     public void addLesson(Lesson lesson){
         lessons.add(lesson);
+    }
+
+    public void addSubgroup(Subgroup subgroup){
+        subgroups.add(subgroup);
     }
 
 }
