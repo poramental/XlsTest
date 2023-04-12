@@ -24,10 +24,19 @@ public  class Parser {
     private ParserStage parsMode;
 
     public List<Teacher> getTeachers() {
+        for(int i = 0; i < teachers.size(); i++){
+            teachers.get(i).getLessons().removeIf(lesson -> lesson.getName().equals(""));
+        }
         return teachers;
     }
 
     public List<Group> getGroups() {
+        for(int i = 0; i < groups.size(); i++){
+            groups.get(i).getLessons().removeIf(lesson -> lesson.getName().equals(""));
+            for(int j = 0; j < groups.get(i).getSubgroups().size(); j++){
+                groups.get(i).getSubgroups().get(j).getLessons().removeIf(lesson -> lesson.getName().equals(""));
+            }
+        }
         return groups;
     }
 
@@ -154,7 +163,6 @@ public  class Parser {
     public void parse(File xlsFile) throws Exception{
         Workbook wb = readWorkbook(xlsFile);
         List<Cell> workspace = returnWorkspace(wb);
-        print(workspace);
         final int length = getLengthOfWorkspace(workspace);
         parsMode = ParserStage.PARSER_STAGE_NAME_OF_GROUPS;
         HashMap<Integer,Subgroup> map = parseGroups(workspace);
@@ -209,7 +217,7 @@ public  class Parser {
                 countOfLessons++;
                 if ((isAdjacentColumns(workspace.get(i),workspace.get(i + 1)) ||
                         isPenultimateColumnAndTheNextIsTheFirst(workspace.get(i),workspace.get(i+1),length)) ||
-                        isSingleColumnInTheRow(workspace.get(i),workspace.get(i+1))){
+                        isSingleColumnInTheRow(workspace.get(i),workspace.get(i+1))) {
 
                     int firstColumnIndex = workspace.get(i).getColumnIndex();
                     int secondColumnIndex = workspace.get(i + 1).getColumnIndex();
